@@ -1,0 +1,389 @@
+Curso EJB - Enterprise Java Beans
+
+Overview de EJB's
+
+Serviço do Container EJB - Requisitos não funcionais {
+	Pool de Conexões
+	Persistência
+	Gerenciamento de Transações
+	Error Handling / Logging ( Tratamento de Exceções, estratégia para resolver)
+	Sincronização de Acesso
+	Agendamento
+	Web Services
+	Segurança
+}
+
+Servidor de Aplicação vs Servlet Container
+
+Inversão de Controle - Muitos do requisitos não funcionais são gerenciados pelo Container EJB
+
+Qualquer classe pode ser Injetável(O EJB Container irá tomar conta)
+
+Para usar EJB's SEMPRE precisamos de servidor de Aplicação: 
+Red Hat JBoss AS (Application Server), Oracle Glassfish, Apache Geronimo, Oracle WebLogic.
+que é diferente de Servlet Container.
+
+Entendendo mais o Enterprise JavaBeans - EJB, https://www.devmedia.com.br/enterprise-javabeans/26402
+
+
+
+INJEÇÃO DE DEPENDÊNCIAS com o @Inject, onde a anotação pede para o EJB Container ceder uma instancia 
+da classe que foi definda como Bean com uma das anotações como, @Stateless, @Statefull, @Singleton.
+
+
+Pesquisar sobre CDI e a diferença de CDI para Bean Session*
+
+Entendendo mais sobre CDI = Contexts and Dependency Injection - http://blog.caelum.com.br/use-cdi-no-seu-proximo-projeto-java/
+Especificação CDI, Implementação Weld.
+
+
+Bean - {
+
+Utilizando a arquitetura EJB, as regras de negócio são implementadas em componentes específicos que são chamados de Session Beans. 
+O EJB Container administra esses componentes oferecendo diversos recursos a eles.
+
+Repare na saída algumas informações sobre a classe AutorDao. Ao subir, o servidor - para ser mais correto,
+o EJB Container - achou aquela anotação @Stateless e registrou esse EJB dentro de um registro disponível no servidor. 
+Aquele egistro se chama JNDI e o que estamos vendo na saída é o endereço do EJB nesse registro JNDI. O servidor usa por 
+baixo dos panos esse registro JNDI para organizar os componentes que ele administra.
+
+Stateless Session Bean é o primeiro tipo de Session Bean. Os Stateless Session Bean não mantém estado de conversação com o cliente, 
+não têm compromisso de manter uma sessão, são intercambiáveis e podem ser alocados de um pool e são EJBs econômicos;
+
+	Session Bean {
+
+	Transformando as classes comuns (Poderia ser POJO's) em Beans gerenciaveis com as anotações, acima da classe, abaixo, Stateless, Statefull, Singleton
+	o Servidor de Aplicação/Container/EJB Container gerencia-o sobre tudo que foi colocado acima em REQUISITOS NÃO FUNCIONAIS. 
+	
+	Do lado de quem recebe o EJB para ser utilizado é necessário utilizar outra anotação acima do atributo o @Inject, ex.:
+	
+		@Inject
+		private AutorDao dao;
+	
+	@Stateless
+	
+	Thread Safe - Apenas uma thread pode usar o AutorDao ao mesmo tempo, visto isso no AutorDao, quando a thread em execução é
+	colocada para aguardar e caso se faça duas chamadas no tempo que está travada o EJB cria outro AutorDao para o acesso.
+	
+	Pool de Objetos (Pooling for Stateless Session EJBs) - Um quantidade pre-determinada de objetos para serem utilizados 
+	pelos usuários que é configurada pelo arquivo standalone.xml, 
+	entre as tags <pools> juntamente com o atributo max-pool-size
+	
+	@Statefull
+	
+	É um objeto exclusivo de um cliente, apenas um cliente usará este objeto.
+	Parecido com o HttpSession.
+	
+	O Session Bean Stateful (SBSF) tem uma funcionalidade muito parecida com a do objeto HttpSession: representa um objeto para o cliente. 
+	Ideal para guardar informações que só dizem respeito ao cliente. Exemplos disso são carrinhos de compras ou permissões.
+	
+	@Singleton
+	
+	Tipicamente utilizada para inicializar uma configuração
+	Agendar serviço, pois só faz sentido no inicio da aplicação.
+	Uma única instancia, compartilhada para todos os usuários.
+	Por padrão o EJB é carregado sobre demanda porem, com a anotação @Startup esse bean será inicializado junto com a aplicação (Eager Initialization)
+	
+	} 
+	
+	Ciclo de Vida {
+	
+	Pesquisar sobre os ciclos de vida do Session Bean
+	
+	Os métodos ligados ao ciclo de vida dos beans são chamados de Callback.
+	
+	@PostConstruct - Anotação indica para o metodo que é anotado que após o bean ser criado 
+	pelo container ejb ele, o método anotado, será chamado.
+	
+	}
+}
+
+Injeção de Dependências - 
+
+O DAO está sendo administrado pelo EJB Container. Portanto, quem cria o DAO é o EJB Container e não a minha classe. 
+Consequentemente precisamos pedir ao EJB Container passar aquela instancia que ele está administrando. 
+Felizmente, isso é fácil de fazer, basta usar a anotação @Inject:
+
+public class AutorBean {
+
+  @Inject
+  private AutorDao dao; //sem new
+
+  //outros métodos e atributos omitidos
+}
+Pronto, o EJB será injetado! Essa parte da inversão de controle também é chamado Injeção de dependências. 
+O DAO é uma dependência que será injetada pelo container.
+
+
+
+@PersistenceContext 
+
+Não usar @Inject porque é utilização do CDI (Context and Dependency Injection) é necessário usar
+@PersistenceContext para objetos EntityManager para que o EJB Container o gerencie.
+
+Entendendo um pouco mais sobre @PersitenceContext 
+links:  
+	https://www.devmedia.com.br/entendendo-o-java-persistencecontext-extended-e-transient/30493
+	https://stackoverflow.com/questions/19930152/what-is-persistence-context
+	
+Anotação especifíca do mundo JPA para o EJB gerenciar.
+
+
+
+
+JTA - <jta-data-source>
+
+Utilizando JTA não é necessário fazer o gerenciamento de uma transação como é feito explicitamente quando não há
+EJB Container que é:
+
+em.getTransaction().begin();
+
+//Faz algo
+
+em.getTransaction().commit();
+em.close();
+
+Depois da utilização do EJB container, representado pela anotação de @PersistenceContext tudo isso fica transparente,
+o EJB Container se preocupa com as transações a partir de agora.
+
+O padrão utilizado pelo JTA que não há necessidade de configuração em relação as transações se chama,
+CMT - Container Managed Transaction também há o BMT - Bean Managed Transaction.
+
+Entendendo o que é JTA - Java Transaction Api: https://pt.wikipedia.org/wiki/Java_Transaction_API
+
+É necessário adicionar o modulo do mysql dentro do Jboss AS, já que ele irá gerenciar as transações/conexões.
+
+Usando multiplos JTA's de ambientes diferentes: http://blog.caelum.com.br/acessando-multiplos-bancos-de-dados-com-jpa-e-cdi/
+
+
+
+Gerenciamento de Transações Programaticamente
+
+http://www.portalarquiteto.com.br/gerenciamento-de-transacoes-com-jta/
+https://lucianomolinari.wordpress.com/2012/04/04/entendendo-os-atributos-de-transacao/
+
+
+Sobre JTA-DATA-SOURCE
+
+Datasource - Configuração do Datasource dentro do Jboss AS
+
+https://www.ibm.com/support/knowledgecenter/pt-br/SSAW57_8.5.5/com.ibm.websphere.nd.multiplatform.doc/ae/tejb_configjpa.html
+
+Configuração de Drivers no servidor 
+Configuração de DataSources no servidor 
+				<datasource jndi-name="java:/livrariaDS"
+					pool-name="livrariaDS" enabled="true" use-java-context="true">
+
+					<connection-url>jdbc:mysql://localhost:3306/livraria_ejb_alura</connection-url>
+					<driver>com.mysql</driver>
+					<pool>
+						<min-pool-size>10</min-pool-size>
+						<max-pool-size>100</max-pool-size>
+						<prefill>true</prefill>
+					</pool>
+					<security>
+						<user-name>root</user-name>
+						<password>root</password>
+					</security>
+				</datasource>
+				
+				
+				
+
+Pesquisar sobre @Named e @RequestScoped;
+
+Explicação Alura:
+
+Observação: As anotações @Named e @RequestScoped vem de uma outra especificação do Java EE, vem do CDI (Context and Dependency Injection). 
+As especificações CDI e EJB são bem parecidas no sentido que ambos fazem Inversão de controle e Injeção de dependências. A diferença é que 
+o CDI não sabe, por padrão pelo menos, gerenciar o JPA e a transação e não oferece vários outros serviços do mundo EJB 
+(como remotabilidade ou timer service). EJB e CDI são de certa forma concorrentes dentro do JavaEE, sendo EJB um pouco mais 
+completo e o CDI um pouco mais flexível/simples. Na nossa aplicação o CDI tem o papel de juntar a interface JSF com EJB. 
+O CDI é o intermediário entre os dois.
+
+
+
+Serviços como Transaction boundary
+
+Imagens: Arquitetura_Beans-Service-Dao e Arquitetura_Beans-Service-Dao versão 2 mostram sobre 
+e o link: https://cursos.alura.com.br/forum/topico-servicos-como-transaction-boundary-18173
+tem uma discussão interessante sobre essa arquitetura em sistemas robustos
+
+Nesse método poderiam ficar mais regras ou chamadas de regras de negócios. É muito comum ter essa divisão de responsabilidade entre bean, 
+serviço e DAO em um projeto real. O bean possui muito código relacionado ao JSF (view), o serviço é o controlador na regra de negócio e o DAO 
+possui o código de infra-estrutura.
+
+Acontece que agora as responsabilidades estão bem definidas. O Bean continua fazendo seu papel na camada View, 
+o DAO não tem mais a preocupação com as transações (TX:MANDATORY), mantendo sua atenção exclusivamente em seu 
+papel na camada de Model (infra). Surgem então o AutorService, que fará a ligação entre o Bean e o DAO e será o 
+controlador na regra de negócio. Cuidará, dentre outras coisas, da garantia de uma transação aberta (TX:REQUIRED) 
+para os métodos do DAO utilizarem.
+
+Resumindo, o Bean recebe as chamadas da tela e delega para o Service, que por sua vez abre a transação e delega 
+para o DAO que a utiliza na finalização do processo.
+
+
+
+
+Exceções
+
+Link ref: https://bgasparotto.com/pt/ejb/application-exception-system-exception/
+
+Como o EJB lida com elas ?
+
+
+Uma System Exception é algo grave, imprevisto, não deveria acontecer e sempre causa um rollback da transação. Normalmente são exceções de infra-estrutura. Além disso, aquele Session Bean que lançou a exceção é invalidado e retirado do pool de objetos. Por padrão, qualquer exceção unchecked é System Exception.
+
+Uma Application Exception pode acontecer durante a vida da aplicação e relacionada ao domínio. Por isso não causa rollback e nem invalida o Session Bean. Por padrão, qualquer exceção checked é Application Exception.
+
+System e Application Exceptions
+Vimos dois comportamentos diferentes do container referentes a exceção. O primeiro exemplo foi uma exceção do tipo unchecked 
+que causou um rollback, e o segundo exemplo usou uma exceção checked que não causou rollback.
+
+Pelo ponto de vista do container, o primeiro exemplo representa uma System Exception, algo grave e imprevisto. 
+System Exception sempre causam rollback. Além disso, aquele Session Bean que lançou a exceção é invalidado e retirado do pool de objetos.
+
+O segundo exemplo representa uma Application Exception. Que é uma erro que pode acontecer durante a vida da aplicação e 
+é relacionado ao domínio. Por isso não causa rollback e nem invalida o Session Bean.
+
+Por padrão, qualquer exceção unchecked é uma System Exception e qualquer exceção checked é uma Application Exception. 
+Isso é o padrão do EJB Container, mas como já vimos anteriormente, esse padrão pode ser reconfigurado.
+
+
+
+Configurando Application Exceptions
+
+Vamos abrir a classe LivrariaException e deixar explícito que ela é uma Application Exception. 
+Para isso usaremos a anotação @ApplicationException que possui atributos para redefinir o comportamento referente a transação. 
+Vamos fazer uma configuração para que essa Application Exception cause sim um rollback:
+
+@ApplicationException(rollback=true)
+public class LivrariaException extends Exception{
+
+}
+Como sempre, vamos testar o novo comportamento. Ao cadastrar um autor pela interface web é lançado uma LivrariaException. 
+Novamente a exceção aparece no console do Eclipse e repare também que essa exceção não foi embrulhada. Até aqui é tudo igual. 
+No entanto, ao verificar o banco de dados, percebemos que o autor não foi salvo, ou seja, foi feito um rollback da transação.
+
+Por fim, uma vez declarado a LivrariaException como @ApplicationException, podemos deixar ela unchecked. 
+Isso significa que não precisamos estender a classe Exception e sim RuntimeException. Assim, o compilador 
+não obriga o desenvolvedor a fazer um tratamento explicito da exceção. Podemos, então, apagar aquelas 
+declarações throws na assinatura dos métodos no AutorBean e no AutorService.
+
+
+Interceptor (Interceptadores)
+
+Uma classe com um único método. Nesse método podemos executar algum código antes e depois de uma chamada concreta de um Session Bean. 
+Isso torna os interceptadores candidatos ideais para tratamento de erro personalizado, monitoramento ou auditoria.
+
+links ref: {
+
+	https://www.ibm.com/support/knowledgecenter/pt-br/SSAW57_8.5.5/com.ibm.websphere.nd.multiplatform.doc/ae/rejb_3interceptors.html
+	https://www.tutorialspoint.com/ejb/ejb_interceptors.htm
+
+}
+
+@AroundInvoke - Annotation a ser pesquisada.
+
+@Interceptors({LogInterceptor.class, LogInterceptor.class}) - Encima da classe ou de um método especifíco que será
+intercetapda pela classe ou classes que está indicada dentro do array de string's porem isso pode ser trabalho 
+(Ver - Imagem Interceptadores - Pt3) e por isso um arquivo xml ajuda nisso ele deve 
+ficar em WebContent > WEB-INF > lib > ejb-jar.xml, com as configurações de mapeamento.
+
+Então, um interceptador permite ligar e desligar um serviço com os Session Beans, sem alterar um bean especifico. 
+Fizemos apenas um monitoramento, mas poderíamos implementar algo muito mais sofisticado com segurança ou cache.
+Repare também que seria possível implementar o gerenciamento da transação manualmente, através do UserTransaction 
+no interceptador. Podemos injetar qualquer recurso dentro do interceptador. É bom pensar que o interceptador 
+faz parte da funcionalidade do Session Bean, só que fica separado e serve para vários beans.
+
+
+@Interceptors({LogInterceptador.class, AuditoriaInterceptador.class}) - Chama os interceptors em cadeia antes de chamar o bean
+
+Como vimos, interceptadores podem ser chamados em uma cadeia. É bom pensar que um interceptador é como uma casca do Session Bean. 
+Faz parte dele e podemos adicionar quantas cascas quisermos.
+
+Links de referência: 
+	
+	http://javafree.uol.com.br/artigo/883829/Interceptores-com-EJB-3.html
+	https://www.devmedia.com.br/java-ee-cdi-como-e-quando-utilizar-interceptors-e-decorators/38104
+	https://www.ibm.com/support/knowledgecenter/pt-br/SSAW57_8.5.5/com.ibm.websphere.nd.multiplatform.doc/ae/rejb_3interceptors.html
+	https://www.tutorialspoint.com/ejb/ejb_interceptors.htm
+
+	
+	
+	
+
+
+
+Web Service SOAP e WSDL
+
+SOAP (Simple Object Access Protocol)
+WSDL (Webservice Description Language)
+JAX-WS (Java API for XML Web Services) e JAX-RS (Java API for XML RESTFul Web Services)
+
+Link ref: https://www.devmedia.com.br/desenvolvendo-e-usando-web-services-em-java/37261
+
+Ejb usa o JAX-WS para publicar os web services.
+
+Uma chamada do webservice SOAP é por padrão do tipo POST.
+
+http://localhost:8080/livraria/LivrariaWS?wsdl : Com esse paramêtro adicionado , ?wsdl, é possível acessar a interface/definição do serviço
+SOAP livrariaWs
+
+É necessário criar um outro projeto para entender mais do SOAP, é um projeto Java com o WebService Client,
+ele utiliza o ?wsdl, para criar as classes auxiliares e obter os dados remotamente do soap, dentro dessas
+tantas classes tem um padrão, e nesse padrão a classe PROXY é a classe que faz as chamadas para o serviço SOAP
+
+
+
+
+
+Agendamento e EAR
+
+Em relação ao Agendamento de ações diretamente ligados ao servidor:
+
+@Singleton - É o session bean mais interessante até agora pois está funcionando em todas as instâncias;
+@Startup - Complementa e implica que funcionará assim que o servidor levantar;
+@Schedule - Sobre o método indica o tempo que esse método funcionará e pode ser indicado dia, hora, minuto, segundo;
+Doc @Schedule https://docs.oracle.com/javaee/6/tutorial/doc/bnboy.html
+
+podemos configurar a chamada do método às 9hs e 18hs, bastando colocar o atributo hour="9,18"
+Igualmente podemos definir o minuto exato, pelo atributo minute, por exemplo minute="1,30,59"
+Vamos executar a cada dez segundos, o que é especificado pela expressão second="*/10".
+
+Todo agendamento é persistido automaticamente. É obrigação do container EJB recuperar um agendamento 
+caso o servidor tenha caído, por isso ele grava suas configurações. Podemos desabilitar isso 
+através do atributo persistent=false.
+
+EAR - Enterprise Application aRchive - Link : https://en.wikipedia.org/wiki/EAR_(file_format)
+
+Seria como colocar projetos(modulos) dependentes em um mesmo pack e subir os dois no server.
+
+Que seria basicamente criar um projeto Enterprise Application Project e adicionar os projetos que se quer, depois
+subir(deploy) o ear somente.
+
+
+
+Os EJBs, quando nasceram lá em 1999, eram todos objetos remotos! 
+O que significa isso? Significa que qualquer acesso ao EJB, qualquer 
+chamada de um método era feita pela rede! Não era possível chamar um EJB localmente, ou seja, dentro de mesma JVM.
+
+EJB <---- chamada remota via rede ------> EJB
+Isso certamente não foi uma boa ideia, já que piora muito o desempenho (muito IO na rede!) e complica 
+desnecessariamente o desenvolvimento. Muito padrões do antigo J2EE foram criados para se sobreviver a 
+complexidade que veio de graça com o modelo distribuído de desenvolvimento. Talvez você já ouviu falar 
+dos padrões como DTO (Data Transfer Object), Session Facade ou Business Delegate.
+
+Há um artigo famoso do Martin Fowler que foi muito citado na época que fala sobre os problemas da distribuição de objetos:
+
+http://www.drdobbs.com/errant-architectures/184414966
+
+Além disso, o Martin Fowler no livro Pattern of Enterprise Application Architecture resumiu a 
+discussão e criou uma "lei" ou regra fundamental do design de objetos distribuídos. Dê uma olhada nessa regra:
+
+http://martinfowler.com/bliki/FirstLaw.html
+
+O que a lei define?
+
+
+	
